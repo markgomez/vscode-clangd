@@ -51,6 +51,7 @@ class EnableEditsNearCursorFeature implements vscodelc.StaticFeature {
         capabilities.textDocument?.completion;
     extendedCompletionCapabilities.editsNearCursor = true;
   }
+  getState(): vscodelc.FeatureState { return {kind: 'static'}; }
   dispose() {}
 }
 
@@ -115,6 +116,12 @@ export class ClangdContext implements vscode.Disposable {
                 new vscode.Range((item.range as vscode.Range).start, position))
             if (prefix)
             item.filterText = prefix + '_' + item.filterText;
+            // Workaround for https://github.com/clangd/vscode-clangd/issues/357
+            // clangd's used of commit-characters was well-intentioned, but
+            // overall UX is poor. Due to vscode-languageclient bugs, we didn't
+            // notice until the behavior was in several releases, so we need
+            // to override it on the client.
+            item.commitCharacters = [];
             return item;
           })
           return new vscode.CompletionList(items, /*isIncomplete=*/ true);
@@ -156,7 +163,7 @@ export class ClangdContext implements vscode.Disposable {
     memoryUsage.activate(this);
     ast.activate(this);
     openConfig.activate(this);
-    this.subscriptions.push(this.client.start());
+    await this.client.start();
     console.log('Clang Language Server is now active!');
     fileStatus.activate(this);
     switchSourceHeader.activate(this);
@@ -170,6 +177,7 @@ export class ClangdContext implements vscode.Disposable {
 
   dispose() {
     this.subscriptions.forEach((d) => { d.dispose(); });
+    this.client.stop();
     this.subscriptions = []
   }
 }
